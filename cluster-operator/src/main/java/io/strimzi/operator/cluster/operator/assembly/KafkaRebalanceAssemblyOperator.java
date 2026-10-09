@@ -1224,6 +1224,11 @@ public class KafkaRebalanceAssemblyOperator
                                 // get latest KafkaRebalance state as it may have changed (see the patching above with "refresh" annotation)
                                 return VertxUtil.toFuture(kafkaRebalanceOperator.getAsync(kafkaRebalance.getMetadata().getNamespace(), kafkaRebalance.getMetadata().getName()))
                                         .compose(currentKafkaRebalance -> {
+                                            if (currentKafkaRebalance == null) {
+                                                // deleted while reconciling (i.e. by the auto-rebalancing)
+                                                LOGGER.infoCr(reconciliation, "KafkaRebalance resource deleted");
+                                                return Future.succeededFuture();
+                                            }
                                             KafkaRebalanceStatus kafkaRebalanceStatus = currentKafkaRebalance.getStatus();
                                             KafkaRebalanceState currentState;
                                             // cluster rebalance is new or it is in one of the others states

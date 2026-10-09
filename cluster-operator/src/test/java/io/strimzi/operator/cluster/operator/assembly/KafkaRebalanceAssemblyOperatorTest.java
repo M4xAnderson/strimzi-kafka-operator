@@ -125,6 +125,21 @@ public class KafkaRebalanceAssemblyOperatorTest extends AbstractKafkaRebalanceAs
                 });
     }
 
+    @Test
+    public void testKafkaRebalanceDeletedDuringReconciliation(VertxTestContext context) {
+        // the KafkaRebalance is never created, as if it was deleted (i.e. by the auto-rebalancing) after the event triggering this reconciliation
+        KafkaRebalance kr = createKafkaRebalance(namespace, CLUSTER_NAME, RESOURCE_NAME, EMPTY_KAFKA_REBALANCE_SPEC, false);
+        crdCreateKafka();
+        crdCreateCruiseControlSecrets();
+
+        Checkpoint checkpoint = context.checkpoint();
+        krao.reconcileKafkaRebalance(new Reconciliation("test-trigger", KafkaRebalance.RESOURCE_KIND, namespace, RESOURCE_NAME), kr)
+                .onComplete(context.succeeding(status -> context.verify(() -> {
+                    assertThat(status, is(nullValue()));
+                    checkpoint.flag();
+                })));
+    }
+
     /**
      * See the {@link KafkaRebalanceAssemblyOperatorTest#testNewToProposalReadyRebalance} for description
      */
