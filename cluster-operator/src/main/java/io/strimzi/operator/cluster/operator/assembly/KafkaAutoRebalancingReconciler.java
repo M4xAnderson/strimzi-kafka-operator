@@ -141,7 +141,7 @@ public class KafkaAutoRebalancingReconciler {
         return CompletableFuture.completedFuture(null);
     }
 
-    // the auto-rebalancing KafkaRebalance is gone while in RebalanceOnScaleDown/RebalanceOnScaleUp (i.e. deleted by the user),
+    // the auto-rebalancing KafkaRebalance is gone while in RebalanceOnScaleDown/RebalanceOnScaleUp (e.g. deleted by the user),
     // start again from Idle with the queued nodes so that a new KafkaRebalance is created right away
     private CompletionStage<Void> onMissingKafkaRebalance(ScalingNodes scalingNodes) {
         LOGGER.warnCr(reconciliation, "Auto-rebalance in the [{}] state but the KafkaRebalance does not exist anymore. Restarting from Idle.",
@@ -163,10 +163,13 @@ public class KafkaAutoRebalancingReconciler {
                         return onMissingKafkaRebalance(scalingNodes);
                     }
 
+                    KafkaRebalanceState kafkaRebalanceState;
                     // a new KafkaRebalance has no status until the KafkaRebalance operator reconciles it for the first time
-                    KafkaRebalanceState kafkaRebalanceState = kafkaRebalance.getStatus() == null
-                            ? KafkaRebalanceState.New
-                            : KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    if (kafkaRebalance.getStatus() == null) {
+                        kafkaRebalanceState = KafkaRebalanceState.New;
+                    } else {
+                        kafkaRebalanceState = KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    }
                     LOGGER.infoCr(reconciliation, "Auto-rebalance on scaling down with KafkaRebalance {}/{} in state [{}]",
                             kafkaRebalance.getMetadata().getNamespace(),
                             kafkaRebalance.getMetadata().getName(),
@@ -259,10 +262,13 @@ public class KafkaAutoRebalancingReconciler {
                         return onMissingKafkaRebalance(scalingNodes);
                     }
 
+                    KafkaRebalanceState kafkaRebalanceState;
                     // a new KafkaRebalance has no status until the KafkaRebalance operator reconciles it for the first time
-                    KafkaRebalanceState kafkaRebalanceState = kafkaRebalance.getStatus() == null
-                            ? KafkaRebalanceState.New
-                            : KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    if (kafkaRebalance.getStatus() == null) {
+                        kafkaRebalanceState = KafkaRebalanceState.New;
+                    } else {
+                        kafkaRebalanceState = KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    }
                     LOGGER.infoCr(reconciliation, "Auto-rebalance on scaling up with KafkaRebalance {}/{} in state [{}]",
                             kafkaRebalance.getMetadata().getNamespace(),
                             kafkaRebalance.getMetadata().getName(),

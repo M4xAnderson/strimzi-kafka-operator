@@ -1225,7 +1225,7 @@ public class KafkaRebalanceAssemblyOperator
                                 return VertxUtil.toFuture(kafkaRebalanceOperator.getAsync(kafkaRebalance.getMetadata().getNamespace(), kafkaRebalance.getMetadata().getName()))
                                         .compose(currentKafkaRebalance -> {
                                             if (currentKafkaRebalance == null) {
-                                                // deleted while reconciling (i.e. by the auto-rebalancing)
+                                                // deleted while reconciling (e.g. by the auto-rebalancing)
                                                 LOGGER.infoCr(reconciliation, "KafkaRebalance resource deleted");
                                                 return Future.succeededFuture();
                                             }

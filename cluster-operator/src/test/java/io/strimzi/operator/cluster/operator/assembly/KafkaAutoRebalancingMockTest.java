@@ -1381,7 +1381,7 @@ public class KafkaAutoRebalancingMockTest {
     }
 
     @Test
-    public void testAutoRebalancingScaleDownAddedNodesKafkaRebalanceMissing(VertxTestContext context) {
+    public void testAutoRebalancingScaleDownAddedNodesWithKafkaRebalanceMissing(VertxTestContext context) {
         // mocking admin client to return specific blocked nodes
         hostPartitionsOnBrokers(List.of(5, 6));
 
