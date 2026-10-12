@@ -3,6 +3,7 @@
 ## 1.4.0
 
 * Strimzi Drain Cleaner updated to 1.7.0 (included in the Strimzi installation files)
+* Fixed auto-rebalancing failing with a NullPointerException when the KafkaRebalance has no status yet or was deleted.
 
 ## 1.3.0
 

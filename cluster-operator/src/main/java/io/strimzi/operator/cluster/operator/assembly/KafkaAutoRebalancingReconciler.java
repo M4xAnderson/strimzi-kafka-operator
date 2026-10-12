@@ -141,11 +141,35 @@ public class KafkaAutoRebalancingReconciler {
         return CompletableFuture.completedFuture(null);
     }
 
+    // the auto-rebalancing KafkaRebalance is gone while in RebalanceOnScaleDown/RebalanceOnScaleUp (e.g. deleted by the user),
+    // start again from Idle with the queued nodes so that a new KafkaRebalance is created right away
+    private CompletionStage<Void> onMissingKafkaRebalance(ScalingNodes scalingNodes) {
+        LOGGER.warnCr(reconciliation, "Auto-rebalance in the [{}] state but the KafkaRebalance does not exist anymore. Restarting from Idle.",
+                kafkaAutoRebalanceStatus.getState());
+        // same as when a scale down stops a running scale up: nodes blocked on scale down which are the same as the added
+        // ones won't exist anymore after the scale down, so the auto-rebalancing on scale up is not queued
+        ScalingNodes queuedNodes = !scalingNodes.blocked().isEmpty() && scalingNodes.blocked().equals(scalingNodes.added())
+                ? new ScalingNodes(scalingNodes.blocked(), Set.of())
+                : scalingNodes;
+        // keeping the queued nodes in the status, in case the KafkaRebalance creation fails
+        updateStatus(kafkaAutoRebalanceStatus, KafkaAutoRebalanceState.Idle, queuedNodes);
+        return onIdle(queuedNodes);
+    }
+
     private CompletionStage<Void> onRebalanceOnScaleDown(ScalingNodes scalingNodes) {
         return getKafkaRebalance(reconciliation.namespace(), reconciliation.name(), KafkaAutoRebalanceMode.REMOVE_BROKERS)
                 .thenCompose(kafkaRebalance -> {
+                    if (kafkaRebalance == null) {
+                        return onMissingKafkaRebalance(scalingNodes);
+                    }
 
-                    KafkaRebalanceState kafkaRebalanceState = KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    KafkaRebalanceState kafkaRebalanceState;
+                    // a new KafkaRebalance has no status until the KafkaRebalance operator reconciles it for the first time
+                    if (kafkaRebalance.getStatus() == null) {
+                        kafkaRebalanceState = KafkaRebalanceState.New;
+                    } else {
+                        kafkaRebalanceState = KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    }
                     LOGGER.infoCr(reconciliation, "Auto-rebalance on scaling down with KafkaRebalance {}/{} in state [{}]",
                             kafkaRebalance.getMetadata().getNamespace(),
                             kafkaRebalance.getMetadata().getName(),
@@ -234,8 +258,17 @@ public class KafkaAutoRebalancingReconciler {
     private CompletionStage<Void> onRebalanceOnScaleUp(ScalingNodes scalingNodes) {
         return getKafkaRebalance(reconciliation.namespace(), reconciliation.name(), KafkaAutoRebalanceMode.ADD_BROKERS)
                 .thenCompose(kafkaRebalance -> {
+                    if (kafkaRebalance == null) {
+                        return onMissingKafkaRebalance(scalingNodes);
+                    }
 
-                    KafkaRebalanceState kafkaRebalanceState = KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    KafkaRebalanceState kafkaRebalanceState;
+                    // a new KafkaRebalance has no status until the KafkaRebalance operator reconciles it for the first time
+                    if (kafkaRebalance.getStatus() == null) {
+                        kafkaRebalanceState = KafkaRebalanceState.New;
+                    } else {
+                        kafkaRebalanceState = KafkaRebalanceUtils.rebalanceState(kafkaRebalance.getStatus());
+                    }
                     LOGGER.infoCr(reconciliation, "Auto-rebalance on scaling up with KafkaRebalance {}/{} in state [{}]",
                             kafkaRebalance.getMetadata().getNamespace(),
                             kafkaRebalance.getMetadata().getName(),
@@ -302,7 +335,9 @@ public class KafkaAutoRebalancingReconciler {
                                 return stopKafkaRebalance(kafkaRebalance)
                                         // getting the patched version of the KafkaRebalance (stopped by annotation) for the next deletion operation (which patches again to remove finalizer)
                                         .thenCompose(v -> getKafkaRebalance(reconciliation.namespace(), reconciliation.name(), KafkaAutoRebalanceMode.ADD_BROKERS))
-                                        .thenCompose(stoppedKafkaRebalance -> deleteKafkaRebalance(stoppedKafkaRebalance))
+                                        .thenCompose(stoppedKafkaRebalance -> stoppedKafkaRebalance != null
+                                                ? deleteKafkaRebalance(stoppedKafkaRebalance)
+                                                : CompletableFuture.<Void>completedFuture(null))
                                         .thenCompose(v -> createKafkaRebalance(reconciliation.namespace(), reconciliation.name(), KafkaAutoRebalanceMode.REMOVE_BROKERS, scalingNodes.blocked().stream().toList()))
                                         .thenCompose(created -> {
                                             if (created) {
